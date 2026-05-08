@@ -11,7 +11,10 @@ SECRET_KEY = config('SECRET_KEY', default=DEFAULT_SECRET_KEY)
 # DEBUG should be False in production
 DEBUG = config('DEBUG', default=False, cast=bool)
 
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1,0.0.0.0,.railway.app,.up.railway.app').split(',')
+# Allow all hosts for Railway deployment
+import os
+RAILWAY_DOMAIN = os.environ.get('RAILWAY_PUBLIC_DOMAIN', '')
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default=f'localhost,127.0.0.1,0.0.0.0,{RAILWAY_DOMAIN}').split(',')
 
 INSTALLED_APPS = [
     'django.contrib.admin',
