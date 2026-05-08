@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>💌 Just Us</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  :root {
+    --rose: #e8789a;
+    --rose-dark: #c4567a;
+    --rose-glow: rgba(232,120,154,0.18);
+    --gold: #e8c87a;
+    --bg: #0d0a0f;
+    --bg2: #161118;
+    --bg3: #1e1525;
+    --surface: #221929;
+    --surface2: #2a1f33;
+    --text: #f0e8f0;
+    --text2: #a892b4;
+    --text3: #6b5578;
+    --border: rgba(232,120,154,0.12);
+    --shadow: 0 4px 32px rgba(0,0,0,0.6);
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    overflow: hidden;
+  }
+
+  /* ── SCREENS ── */
+  .screen { position: fixed; inset: 0; display: flex; flex-direction: column; transition: opacity 0.4s, transform 0.4s; }
+  .screen.hidden { opacity: 0; pointer-events: none; transform: translateY(20px); }
+
+  /* ── ROOM CHOICE ── */
+  #room-screen {
+    background: var(--bg);
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+  }
+
+  .room-inner { width: 100%; max-width: 360px; text-align: center; }
+
+  .room-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.6rem;
+    color: var(--text);
+    margin-bottom: 0.4rem;
+  }
+
+  .room-sub { font-size: 0.85rem; color: var(--text2); margin-bottom: 2rem; }
+
+  .room-field {
+    background: var(--surface);
+    border: 0.5px solid var(--border);
+    border-radius: 16px;
+    padding: 1.2rem;
+    margin-bottom: 1rem;
+    text-align: left;
+  }
+
+  .room-field label { font-size: 0.75rem; color: var(--text2); text-transform: uppercase; letter-spacing: 1.5px; display: block; margin-bottom: 0.5rem; }
+
+  .room-input {
+    width: 100%;
+    background: var(--bg3);
+    border: 0.5px solid var(--border);
+    border-radius: 10px;
+    padding: 0.8rem 1rem;
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 1rem;
+    outline: none;
+    transition: border-color 0.2s;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+  }
+
+  .room-input:focus { border-color: var(--rose); }
+  .room-input::placeholder { color: var(--text3); text-transform: none; letter-spacing: 0; }
+
+  .room-divider { display: flex; align-items: center; gap: 1rem; margin: 1.2rem 0; }
+  .room-divider span { font-size: 0.75rem; color: var(--text3); flex-shrink: 0; }
+  .room-divider-line { flex: 1; height: 0.5px; background: var(--border); }
+
+  .room-btn {
+    width: 100%;
+    padding: 0.85rem;
+    border: 0.5px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.15s;
+  }
+
+  .room-btn:active { transform: scale(0.98); }
+  .room-btn.primary { background: linear-gradient(135deg, var(--rose-dark), var(--rose)); border: none; color: #fff; margin-bottom: 0.8rem; }
+
+  .room-code-display {
+    background: var(--bg3);
+    border: 1px dashed var(--rose);
+    border-radius: 12px;
+    padding: 1rem;
+    margin-top: 1rem;
+    display: none;
+  }
+
+  .room-code-display .code-label { font-size: 0.75rem; color: var(--text2); letter-spacing: 1px; text-transform: uppercase; margin-bottom: 0.3rem; }
+  .room-code-display .code-val { font-family: 'Playfair Display', serif; font-size: 1.8rem; color: var(--rose); letter-spacing: 6px; }
+  .room-code-display .code-hint { font-size: 0.75rem; color: var(--text3); margin-top: 0.4rem; }
+
+  /* Toast */
+  .toast {
+    position: fixed;
+    top: 1.2rem;
+    left: 50%;
+    transform: translateX(-50%) translateY(-80px);
+    background: var(--surface2);
+    border: 0.5px solid var(--border);
+    border-radius: 999px;
+    padding: 0.5rem 1.2rem;
+    font-size: 0.82rem;
+    color: var(--text2);
+    transition: transform 0.35s cubic-bezier(0.34,1.56,0.64,1);
+    z-index: 999;
+    white-space: nowrap;
+  }
+
+  .toast.show { transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<!-- ROOM SCREEN -->
+<div class="screen" id="room-screen">
+  <div class="room-inner">
+    <h2 class="room-title">Your Room</h2>
+    <p class="room-sub">Create a new room or join your partner's</p>
+
+    <div class="room-field">
+      <label>Create a New Room</label>
+      <button class="room-btn primary" onclick="createRoom()">✦ Create New Room</button>
+      <div class="room-code-display" id="created-code-box">
+        <div class="code-label">Share this code with her</div>
+        <div class="code-val" id="created-code-val"></div>
+        <div class="code-hint">She enters this to join you ↓</div>
+      </div>
+    </div>
+
+    <div class="room-divider">
+      <div class="room-divider-line"></div>
+      <span>or join hers</span>
+      <div class="room-divider-line"></div>
+    </div>
+
+    <div class="room-field">
+      <label>Enter Room Code</label>
+      <input class="room-input" id="room-code-input" placeholder="e.g. ROSE24" maxlength="6" autocomplete="off" oninput="this.value=this.value.toUpperCase()">
+    </div>
+
+    <button class="room-btn primary" onclick="joinRoom()">💌 Enter Our Room</button>
+    <button class="room-btn" onclick="goBack()">← Back</button>
+  </div>
+</div>
+
+<script>
+// ── STATE ──
+const state = {
+  myName: '{{ user_name }}',
+  myAvatar: '{{ user_avatar }}',
+  roomCode: '',
+};
+
+// ── ROOM CREATION ──
+function createRoom() {
+  if (!state.myName || state.myName.trim() === '') {
+    showToast('Please enter your name first');
+    return;
+  }
+  
+  fetch('/chat/create_room/', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      name: state.myName,
+      avatar: state.myAvatar
+    })
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success) {
+      state.roomCode = data.room_code;
+      document.getElementById('created-code-val').textContent = data.room_code;
+      document.getElementById('created-code-box').style.display = 'block';
+      showToast('Room created! Share the code 💌');
+    } else {
+      showToast('Error creating room: ' + (data.error || 'Unknown error'));
+    }
+  })
+  .catch(error => {
+    showToast('Network error creating room');
+    console.error('Room creation error:', error);
+  });
+}
+
+function joinRoom() {
+  const code = document.getElementById('room-code-input').value.trim().toUpperCase();
+  if (code.length < 4) { showToast('Enter the room code 💌'); return; }
+  
+  if (!state.myName || state.myName.trim() === '') {
+    showToast('Please enter your name first');
+    return;
+  }
+  
+  fetch('/chat/join_room/', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      room_code: code,
+      name: state.myName,
+      avatar: state.myAvatar
+    })
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success) {
+      state.roomCode = code;
+      window.location.href = `/chat/chat/${code}/`;
+    } else {
+      showToast(data.error || 'Invalid room code');
+    }
+  })
+  .catch(error => {
+    showToast('Network error joining room');
+    console.error('Join room error:', error);
+  });
+}
+
+function goBack() {
+  window.location.href = '/chat/';
+}
+
+// ── UTILS ──
+function showToast(msg, dur = 2500) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), dur);
+}
+
+function getCookie(name) {
+  let cookieValue = null;
+  if (document.cookie && document.cookie !== '') {
+    const cookies = document.cookie.split(';');
+    for (let i = 0; i < cookies.length; i++) {
+      const cookie = cookies[i].trim();
+      if (cookie.substring(0, name.length + 1) === (name + '=')) {
+        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+        break;
+      }
+    }
+  }
+  return cookieValue;
+}
+</script>
+</body>
+</html>
