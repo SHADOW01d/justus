@@ -265,6 +265,7 @@
     .input-area {
       padding: 0.8rem;
       gap: 0.6rem;
+      min-height: 80px;
     }
 
     .message-input {
@@ -286,6 +287,24 @@
       font-size: 0.9rem;
       padding: 0.6rem 1rem;
     }
+
+  /* Mobile-specific fixes */
+  @media (max-width: 768px) {
+    .input-area {
+      padding: 0.6rem;
+      min-height: 70px;
+    }
+    
+    .message-input {
+      font-size: 16px; /* Prevents zoom on iOS */
+      padding: 0.5rem;
+    }
+    
+    .emoji-btn, .file-btn, .voice-btn {
+      font-size: 1.1rem;
+      padding: 0.4rem;
+    }
+  }
 
     .attachment-image {
       max-width: 150px;
@@ -416,6 +435,10 @@
     gap: 0.8rem;
     align-items: flex-end;
     flex-shrink: 0;
+    min-height: 80px;
+    position: sticky;
+    bottom: 0;
+    z-index: 10;
   }
 
   .emoji-btn {
