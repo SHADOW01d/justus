@@ -71,6 +71,11 @@ def join_room(request):
         except Room.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Invalid room code'})
         
+        # Check room capacity
+        current_members = RoomMember.objects.filter(room=room).count()
+        if current_members >= room.max_members:
+            return JsonResponse({'success': False, 'error': f'Room is full (max {room.max_members} people)'})
+        
         # Add user as room member
         RoomMember.objects.get_or_create(
             room=room,

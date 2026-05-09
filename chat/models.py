@@ -11,6 +11,7 @@ class Room(models.Model):
     code = models.CharField(max_length=6, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
     is_active = models.BooleanField(default=True)
+    max_members = models.PositiveSmallIntegerField(default=2)
     
     def __str__(self):
         return f'Room {self.code}'
