@@ -27,6 +27,7 @@ def create_room(request):
         data = json.loads(request.body)
         name = data.get('name', '').strip()
         avatar = data.get('avatar', '🌹')
+        expiration_hours = data.get('expiration_hours', 24)
         
         if not name:
             return JsonResponse({'success': False, 'error': 'Name is required'})
@@ -36,15 +37,19 @@ def create_room(request):
         request.session['user_avatar'] = avatar
         request.session.save()
         
-        # Create room
-        room = Room.objects.create(code=Room.generate_code())
+        # Create room with expiration
+        room = Room.objects.create(
+            code=Room.generate_code(),
+            expiration_hours=expiration_hours
+        )
         
         # Add user as room member
         RoomMember.objects.create(room=room, name=name, avatar=avatar)
         
         return JsonResponse({
             'success': True,
-            'room_code': room.code
+            'room_code': room.code,
+            'expires_at': room.expires_at.isoformat() if room.expires_at else None
         })
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)})
@@ -65,22 +70,39 @@ def join_room(request):
         request.session['user_avatar'] = avatar
         request.session.save()
         
-        # Check if room exists
+        # Check if room exists and is available
         try:
             room = Room.objects.get(code=room_code)
         except Room.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Invalid room code'})
         
-        # Check room capacity
+        # Check if room is expired
+        if not room.is_available():
+            if room.is_expired():
+                return JsonResponse({'success': False, 'error': 'Room has expired'})
+            else:
+                return JsonResponse({'success': False, 'error': 'Room is not available'})
+        
+        # Check if user is already a member (allow re-entry)
+        existing_member = RoomMember.objects.filter(room=room, name=name).first()
+        
+        if existing_member:
+            # User is returning - update avatar if different and allow entry
+            if existing_member.avatar != avatar:
+                existing_member.avatar = avatar
+                existing_member.save()
+            return JsonResponse({'success': True})
+        
+        # Check room capacity for new users
         current_members = RoomMember.objects.filter(room=room).count()
         if current_members >= room.max_members:
             return JsonResponse({'success': False, 'error': f'Room is full (max {room.max_members} people)'})
         
-        # Add user as room member
-        RoomMember.objects.get_or_create(
+        # Add new user as room member
+        RoomMember.objects.create(
             room=room,
             name=name,
-            defaults={'avatar': avatar}
+            avatar=avatar
         )
         
         return JsonResponse({'success': True})

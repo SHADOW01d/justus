@@ -105,6 +105,63 @@
   .room-btn:active { transform: scale(0.98); }
   .room-btn.primary { background: linear-gradient(135deg, var(--rose-dark), var(--rose)); border: none; color: #fff; margin-bottom: 0.8rem; }
 
+  .room-options {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+  }
+
+  .room-duration {
+    background: var(--surface);
+    border: 0.5px solid var(--border);
+    border-radius: 12px;
+    padding: 0.6rem;
+    color: var(--text);
+    font-size: 0.85rem;
+    outline: none;
+    transition: border-color 0.2s;
+    flex: 1;
+  }
+
+  .room-duration:focus { border-color: var(--rose); }
+
+  .code-val-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .copy-btn {
+    background: var(--surface);
+    border: 0.5px solid var(--border);
+    border-radius: 8px;
+    padding: 0.4rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 0.9rem;
+  }
+
+  .copy-btn:hover { 
+    background: var(--surface2); 
+    border-color: var(--rose);
+  }
+
+  .copy-btn:active { transform: scale(0.95); }
+
+  .room-duration-info {
+    margin-top: 0.5rem;
+    padding: 0.5rem;
+    background: rgba(232, 120, 154, 0.1);
+    border-radius: 8px;
+    border-left: 3px solid var(--rose);
+  }
+
+  .room-duration-info small {
+    color: var(--text2);
+    font-size: 0.75rem;
+    line-height: 1.4;
+  }
+
   .room-code-display {
     background: var(--bg3);
     border: 1px dashed var(--rose);
@@ -151,10 +208,26 @@
 
     <div class="room-field">
       <label>Create a New Room</label>
-      <button class="room-btn primary" onclick="createRoom()">✦ Create New Room</button>
+      <div class="room-options">
+        <select class="room-duration" id="room-duration">
+          <option value="1">1 hour</option>
+          <option value="6">6 hours</option>
+          <option value="12">12 hours</option>
+          <option value="24" selected>24 hours</option>
+          <option value="72">3 days</option>
+          <option value="168">1 week</option>
+        </select>
+        <button class="room-btn primary" onclick="createRoom()">✦ Create New Room</button>
+      </div>
+      <div class="room-duration-info">
+        <small>💡 Room will expire after this time and won't be accessible</small>
+      </div>
       <div class="room-code-display" id="created-code-box">
         <div class="code-label">Share this code with her</div>
-        <div class="code-val" id="created-code-val"></div>
+        <div class="code-val-wrapper">
+          <div class="code-val" id="created-code-val"></div>
+          <button class="copy-btn" onclick="copyRoomCode()" title="Copy code">📋</button>
+        </div>
         <div class="code-hint">She enters this to join you ↓</div>
       </div>
     </div>
@@ -190,6 +263,8 @@ function createRoom() {
     return;
   }
   
+  const expirationHours = document.getElementById('room-duration').value;
+  
   fetch('/chat/create_room/', {
     method: 'POST',
     headers: {
@@ -197,6 +272,7 @@ function createRoom() {
     },
     body: JSON.stringify({
       name: state.myName,
+      expiration_hours: parseInt(expirationHours),
       avatar: state.myAvatar
     })
   })
@@ -206,6 +282,30 @@ function createRoom() {
       state.roomCode = data.room_code;
       document.getElementById('created-code-val').textContent = data.room_code;
       document.getElementById('created-code-box').style.display = 'block';
+      
+      // Show expiration info
+      if (data.expires_at) {
+        const expiresAt = new Date(data.expires_at);
+        const now = new Date();
+        const timeLeft = expiresAt - now;
+        const hoursLeft = Math.floor(timeLeft / (1000 * 60 * 60));
+        
+        let expirationText = '';
+        if (hoursLeft < 1) {
+          expirationText = 'Expires in less than 1 hour';
+        } else if (hoursLeft < 24) {
+          expirationText = `Expires in ${hoursLeft} hours`;
+        } else {
+          const daysLeft = Math.floor(hoursLeft / 24);
+          expirationText = `Expires in ${daysLeft} days`;
+        }
+        
+        const codeHint = document.querySelector('.code-hint');
+        if (codeHint) {
+          codeHint.textContent = expirationText + ' • She enters this to join you ↓';
+        }
+      }
+      
       showToast('Room created! Share the code 💌');
     } else {
       showToast('Error creating room: ' + (data.error || 'Unknown error'));
@@ -214,6 +314,25 @@ function createRoom() {
   .catch(error => {
     showToast('Network error creating room');
     console.error('Room creation error:', error);
+  });
+}
+
+// ── COPY ROOM CODE ──
+function copyRoomCode() {
+  const roomCode = document.getElementById('created-code-val').textContent;
+  if (!roomCode) return;
+  
+  navigator.clipboard.writeText(roomCode).then(() => {
+    showToast('Room code copied! 📋');
+  }).catch(err => {
+    // Fallback for older browsers
+    const textArea = document.createElement('textarea');
+    textArea.value = roomCode;
+    document.body.appendChild(textArea);
+    textArea.select();
+    document.execCommand('copy');
+    document.body.removeChild(textArea);
+    showToast('Room code copied! 📋');
   });
 }
 

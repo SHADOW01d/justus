@@ -4,6 +4,7 @@ import random
 import string
 import os
 import time
+from datetime import datetime, timedelta
 from django.core.validators import FileExtensionValidator
 from django.conf import settings
 
@@ -12,6 +13,8 @@ class Room(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     is_active = models.BooleanField(default=True)
     max_members = models.PositiveSmallIntegerField(default=2)
+    expires_at = models.DateTimeField(null=True, blank=True, help_text="Room expiration time")
+    expiration_hours = models.PositiveSmallIntegerField(default=24, help_text="Room lifetime in hours")
     
     def __str__(self):
         return f'Room {self.code}'
@@ -24,6 +27,24 @@ class Room(models.Model):
             code = ''.join(random.choices(chars, k=6))
             if not cls.objects.filter(code=code).exists():
                 return code
+    
+    def save(self, *args, **kwargs):
+        """Override save to set expiration time"""
+        if not self.expires_at and self.expiration_hours:
+            from django.utils import timezone
+            self.expires_at = timezone.now() + timedelta(hours=self.expiration_hours)
+        super().save(*args, **kwargs)
+    
+    def is_expired(self):
+        """Check if room is expired"""
+        if not self.expires_at:
+            return False
+        from django.utils import timezone
+        return timezone.now() > self.expires_at
+    
+    def is_available(self):
+        """Check if room is available for joining"""
+        return self.is_active and not self.is_expired()
 
 class RoomMember(models.Model):
     room = models.ForeignKey(Room, related_name='members', on_delete=models.CASCADE)
