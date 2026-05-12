@@ -175,6 +175,91 @@
   .room-code-display .code-val { font-family: 'Playfair Display', serif; font-size: 1.8rem; color: var(--rose); letter-spacing: 6px; }
   .room-code-display .code-hint { font-size: 0.75rem; color: var(--text3); margin-top: 0.4rem; }
 
+  /* Loading States */
+  .loading {
+    opacity: 0.6;
+    pointer-events: none;
+    position: relative;
+  }
+
+  .loading::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 20px;
+    height: 20px;
+    margin: -10px 0 0 -10px;
+    border: 2px solid var(--rose);
+    border-radius: 50%;
+    border-top-color: transparent;
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  .processing-message {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem 2rem;
+    text-align: center;
+    z-index: 1000;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+  }
+
+  .processing-message h3 {
+    color: var(--rose);
+    margin-bottom: 0.5rem;
+    font-size: 1.1rem;
+  }
+
+  .processing-message p {
+    color: var(--text2);
+    font-size: 0.9rem;
+    margin: 0;
+  }
+
+  .processing-spinner {
+    width: 40px;
+    height: 40px;
+    margin: 1rem auto;
+    border: 3px solid var(--bg3);
+    border-top: 3px solid var(--rose);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+
+  /* Button loading states */
+  button.loading {
+    opacity: 0.7;
+    cursor: not-allowed;
+  }
+
+  button.loading .btn-text {
+    opacity: 0;
+  }
+
+  button.loading::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 16px;
+    height: 16px;
+    margin: -8px 0 0 -8px;
+    border: 2px solid currentColor;
+    border-radius: 50%;
+    border-top-color: transparent;
+    animation: spin 1s linear infinite;
+  }
+
   /* Toast */
   .toast {
     position: fixed;
@@ -217,7 +302,7 @@
           <option value="72">3 days</option>
           <option value="168">1 week</option>
         </select>
-        <button class="room-btn primary" onclick="createRoom()">✦ Create New Room</button>
+        <button class="room-btn primary" id="create-btn" onclick="createRoom()">✦ Create New Room</button>
       </div>
       <div class="room-duration-info">
         <small>💡 Room will expire after this time and won't be accessible</small>
@@ -243,7 +328,7 @@
       <input class="room-input" id="room-code-input" placeholder="e.g. ROSE24" maxlength="6" autocomplete="off" oninput="this.value=this.value.toUpperCase()">
     </div>
 
-    <button class="room-btn primary" onclick="joinRoom()">💌 Enter Our Room</button>
+    <button class="room-btn primary" id="join-btn" onclick="joinRoom()">💌 Enter Our Room</button>
     <button class="room-btn" onclick="goBack()">← Back</button>
   </div>
 </div>
@@ -258,12 +343,13 @@ const state = {
 
 // ── ROOM CREATION ──
 function createRoom() {
-  if (!state.myName || state.myName.trim() === '') {
-    showToast('Please enter your name first');
-    return;
-  }
-  
   const expirationHours = document.getElementById('room-duration').value;
+  const createBtn = document.getElementById('create-btn');
+  
+  // Show loading state
+  createBtn.classList.add('loading');
+  createBtn.disabled = true;
+  showProcessingMessage('Creating Room', 'Setting up your private chat room...');
   
   fetch('/chat/create_room/', {
     method: 'POST',
@@ -278,6 +364,10 @@ function createRoom() {
   })
   .then(response => response.json())
   .then(data => {
+    hideProcessingMessage();
+    createBtn.classList.remove('loading');
+    createBtn.disabled = false;
+    
     if (data.success) {
       state.roomCode = data.room_code;
       document.getElementById('created-code-val').textContent = data.room_code;
@@ -312,8 +402,11 @@ function createRoom() {
     }
   })
   .catch(error => {
+    hideProcessingMessage();
+    createBtn.classList.remove('loading');
+    createBtn.disabled = false;
     showToast('Network error creating room');
-    console.error('Room creation error:', error);
+    console.error('Create room error:', error);
   });
 }
 
@@ -345,6 +438,13 @@ function joinRoom() {
     return;
   }
   
+  const joinBtn = document.getElementById('join-btn');
+  
+  // Show loading state
+  joinBtn.classList.add('loading');
+  joinBtn.disabled = true;
+  showProcessingMessage('Joining Room', 'Connecting to private chat room...');
+  
   fetch('/chat/join_room/', {
     method: 'POST',
     headers: {
@@ -358,14 +458,24 @@ function joinRoom() {
   })
   .then(response => response.json())
   .then(data => {
+    hideProcessingMessage();
+    joinBtn.classList.remove('loading');
+    joinBtn.disabled = false;
+    
     if (data.success) {
       state.roomCode = code;
-      window.location.href = `/chat/chat/${code}/`;
+      showProcessingMessage('Entering Chat', 'Loading your private conversation...');
+      setTimeout(() => {
+        window.location.href = `/chat/chat/${code}/`;
+      }, 1000);
     } else {
       showToast(data.error || 'Invalid room code');
     }
   })
   .catch(error => {
+    hideProcessingMessage();
+    joinBtn.classList.remove('loading');
+    joinBtn.disabled = false;
     showToast('Network error joining room');
     console.error('Join room error:', error);
   });
@@ -373,6 +483,30 @@ function joinRoom() {
 
 function goBack() {
   window.location.href = '/chat/';
+}
+
+// ── PROCESSING MESSAGES ──
+function showProcessingMessage(title, message) {
+  // Remove existing processing message if any
+  hideProcessingMessage();
+  
+  const processingDiv = document.createElement('div');
+  processingDiv.className = 'processing-message';
+  processingDiv.id = 'processing-message';
+  processingDiv.innerHTML = `
+    <h3>${title}</h3>
+    <div class="processing-spinner"></div>
+    <p>${message}</p>
+  `;
+  
+  document.body.appendChild(processingDiv);
+}
+
+function hideProcessingMessage() {
+  const existing = document.getElementById('processing-message');
+  if (existing) {
+    existing.remove();
+  }
 }
 
 // ── UTILS ──

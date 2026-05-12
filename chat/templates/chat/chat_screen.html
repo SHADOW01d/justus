@@ -758,10 +758,122 @@
     transform: scale(0.95);
   }
 
-  /* ── WHATSAPP-STYLE VOICE NOTE PLAYER ── */
-  .voice-note-container {
-    max-width: 300px;
+  /* ── LOADING STATES ── */
+  .loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(13, 10, 15, 0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
   }
+
+  .loading-content {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 2rem;
+    text-align: center;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+  }
+
+  .loading-spinner {
+    width: 50px;
+    height: 50px;
+    margin: 0 auto 1rem;
+    border: 3px solid var(--bg3);
+    border-top: 3px solid var(--rose);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+
+  .loading-title {
+    color: var(--rose);
+    font-size: 1.2rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .loading-message {
+    color: var(--text2);
+    font-size: 0.9rem;
+  }
+
+  /* Button loading states */
+  .btn-loading {
+    opacity: 0.6;
+    pointer-events: none;
+    position: relative;
+  }
+
+  .btn-loading::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 16px;
+    height: 16px;
+    margin: -8px 0 0 -8px;
+    border: 2px solid currentColor;
+    border-radius: 50%;
+    border-top-color: transparent;
+    animation: spin 1s linear infinite;
+  }
+
+  /* Message sending state */
+  .message-sending {
+    opacity: 0.7;
+    background: var(--surface2) !important;
+  }
+
+  .message-sending::after {
+    content: 'Sending...';
+    position: absolute;
+    top: 50%;
+    right: 1rem;
+    transform: translateY(-50%);
+    font-size: 0.8rem;
+    color: var(--text3);
+    font-style: italic;
+  }
+
+  /* File upload progress */
+  .upload-progress {
+    position: fixed;
+    bottom: 100px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    z-index: 1000;
+  }
+
+  .upload-progress-spinner {
+    width: 24px;
+    height: 24px;
+    border: 2px solid var(--bg3);
+    border-top: 2px solid var(--rose);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+
+  .upload-progress-text {
+    color: var(--text2);
+    font-size: 0.9rem;
+  }
+
+  /* ── UTILITIES ── */
+  .hidden { display: none !important; }
+  .fade-in { animation: fadeIn 0.3s ease; }
+  .slide-up { animation: slideUp 0.3s ease; }
 
   .voice-note-player {
     display: flex;
@@ -1297,6 +1409,23 @@ function sendMessage() {
   
   if (!text) return;
 
+  const sendBtn = document.getElementById('send-btn');
+  
+  // Show loading state
+  sendBtn.classList.add('btn-loading');
+  sendBtn.disabled = true;
+  
+  // Add temporary sending message to UI
+  const tempMessageId = 'temp-' + Date.now();
+  addMessageToUI({
+    id: tempMessageId,
+    text: text,
+    sender: state.myName,
+    avatar: state.myAvatar,
+    timestamp: new Date().toISOString(),
+    is_sending: true
+  });
+
   const message = {
     text: text,
     timestamp: new Date().toISOString()
@@ -1315,16 +1444,30 @@ function sendMessage() {
   })
   .then(response => response.json())
   .then(data => {
+    // Remove loading state
+    sendBtn.classList.remove('btn-loading');
+    sendBtn.disabled = false;
+    
     if (data.success) {
+      // Remove temporary message
+      removeMessageFromUI(tempMessageId);
+      
       // Clear input and refresh messages
       input.value = '';
       autoResize(input);
+      toggleMicSendButton(''); // Reset to mic button
       pollMessages(); // Immediately poll to get the new message
     } else {
+      // Remove temporary message and show error
+      removeMessageFromUI(tempMessageId);
       showToast('Error sending message');
     }
   })
   .catch(error => {
+    // Remove loading state and temporary message
+    sendBtn.classList.remove('btn-loading');
+    sendBtn.disabled = false;
+    removeMessageFromUI(tempMessageId);
     showToast('Network error sending message');
     console.error('Send message error:', error);
   });
@@ -1332,6 +1475,16 @@ function sendMessage() {
 
 function addMessage(message, isOwn) {
   state.messages.push({...message, is_own: isOwn});
+  renderMessages();
+}
+
+function addMessageToUI(message) {
+  state.messages.push({...message, is_own: message.sender === state.myName});
+  renderMessages();
+}
+
+function removeMessageFromUI(messageId) {
+  state.messages = state.messages.filter(msg => msg.id !== messageId);
   renderMessages();
 }
 
@@ -1430,14 +1583,19 @@ function handleFileUpload(event) {
   }
   
   // Validate file type
-  const allowedTypes = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf', 'doc', 'docx', 'txt'];
+  const allowedTypes = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf', 'doc', 'docx', 'txt', 'mp3', 'wav', 'ogg', 'm4a', 'aac', 'webm'];
   const fileExtension = file.name.split('.').pop().toLowerCase();
   
   if (!allowedTypes.includes(fileExtension)) {
-    showToast('File type not allowed. Please upload images or documents.');
+    showToast('File type not allowed. Please upload images, documents, or audio files.');
     event.target.value = '';
     return;
   }
+  
+  // Disable file button during upload
+  const fileBtn = document.querySelector('.file-btn');
+  fileBtn.classList.add('btn-loading');
+  fileBtn.disabled = true;
   
   // Show upload progress
   showUploadProgress(file.name);
@@ -1453,6 +1611,10 @@ function handleFileUpload(event) {
   })
   .then(response => response.json())
   .then(data => {
+    // Re-enable file button
+    fileBtn.classList.remove('btn-loading');
+    fileBtn.disabled = false;
+    
     if (data.success) {
       hideUploadProgress();
       showToast(`File uploaded: ${data.filename}`);
@@ -1465,6 +1627,9 @@ function handleFileUpload(event) {
     }
   })
   .catch(error => {
+    // Re-enable file button
+    fileBtn.classList.remove('btn-loading');
+    fileBtn.disabled = false;
     hideUploadProgress();
     showToast('Network error uploading file');
     console.error('File upload error:', error);
@@ -1475,26 +1640,44 @@ function handleFileUpload(event) {
   });
 }
 
-function showUploadProgress(filename) {
-  const progressHtml = `
-    <div class="upload-progress" id="upload-progress">
-      <div class="upload-info">
-        <span>Uploading ${filename}...</span>
-        <div class="upload-spinner"></div>
-      </div>
+// ── LOADING OVERLAY ──
+function showLoadingOverlay(title, message) {
+  // Remove existing overlay if any
+  hideLoadingOverlay();
+  
+  const overlay = document.createElement('div');
+  overlay.className = 'loading-overlay';
+  overlay.id = 'loading-overlay';
+  overlay.innerHTML = `
+    <div class="loading-content">
+      <div class="loading-spinner"></div>
+      <div class="loading-title">${title}</div>
+      <div class="loading-message">${message}</div>
     </div>
   `;
   
-  // Insert progress indicator after input area
-  const inputArea = document.querySelector('.input-area');
-  inputArea.insertAdjacentHTML('afterend', progressHtml);
+  document.body.appendChild(overlay);
+}
+
+function hideLoadingOverlay() {
+  const overlay = document.getElementById('loading-overlay');
+  if (overlay) overlay.remove();
+}
+
+function showUploadProgress(filename) {
+  const progress = document.createElement('div');
+  progress.className = 'upload-progress';
+  progress.id = 'upload-progress';
+  progress.innerHTML = `
+    <div class="upload-progress-spinner"></div>
+    <div class="upload-progress-text">Uploading ${filename}...</div>
+  `;
+  document.body.appendChild(progress);
 }
 
 function hideUploadProgress() {
-  const progressEl = document.getElementById('upload-progress');
-  if (progressEl) {
-    progressEl.remove();
-  }
+  const progress = document.getElementById('upload-progress');
+  if (progress) progress.remove();
 }
 
 // ── WHATSAPP-STYLE VOICE RECORDING ──
@@ -1513,15 +1696,36 @@ async function startVoiceRecording() {
   try {
     // Request microphone access
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    console.log('Microphone access granted, stream active');
     
-    // Initialize MediaRecorder
-    state.mediaRecorder = new MediaRecorder(stream);
+    // Initialize MediaRecorder with better settings
+    const options = {
+      mimeType: 'audio/webm;codecs=opus',
+      audioBitsPerSecond: 128000
+    };
+    
+    // Try different MIME types if first one fails
+    let mimeType = 'audio/webm;codecs=opus';
+    if (!MediaRecorder.isTypeSupported(mimeType)) {
+      mimeType = 'audio/webm';
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        mimeType = 'audio/mp4';
+      }
+    }
+    
+    state.mediaRecorder = new MediaRecorder(stream, { mimeType: mimeType });
     state.audioChunks = [];
     voiceRecordingStartTime = Date.now();
     
+    console.log('MediaRecorder initialized with MIME type:', mimeType);
+    console.log('MediaRecorder state:', state.mediaRecorder.state);
+    
     // Set up event handlers
     state.mediaRecorder.ondataavailable = (event) => {
-      state.audioChunks.push(event.data);
+      if (event.data && event.data.size > 0) {
+        state.audioChunks.push(event.data);
+        console.log('Audio chunk captured:', event.data.size, 'Total chunks:', state.audioChunks.length);
+      }
     };
     
     state.mediaRecorder.onstop = () => {
@@ -1530,8 +1734,16 @@ async function startVoiceRecording() {
     };
     
     // Start recording
-    state.mediaRecorder.start();
-    state.isRecording = true;
+    try {
+      // Start with time slice to ensure data is captured
+      state.mediaRecorder.start(100); // 100ms time slices
+      state.isRecording = true;
+      console.log('Recording started successfully with 100ms time slices');
+    } catch (error) {
+      console.error('Error starting recording:', error);
+      showToast('Error starting recording');
+      state.isRecording = false;
+    }
     
     // Update UI - switch to voice recording mode
     const voiceBtn = document.getElementById('voice-btn');
@@ -1590,11 +1802,29 @@ function cancelVoiceRecording() {
 }
 
 async function sendVoiceRecording() {
-  console.log('Send voice recording called, audio chunks:', state.audioChunks.length);
+  console.log('Send voice recording called');
+  console.log('Audio chunks available:', state.audioChunks.length);
+  console.log('MediaRecorder state:', state.mediaRecorder ? 'exists' : 'null');
+  console.log('Is recording flag:', state.isRecording);
+  console.log('Recording duration:', Date.now() - voiceRecordingStartTime);
   
-  if (!state.audioChunks.length) {
-    showToast('No audio recorded');
+  // Allow sending even if no audio chunks (for silent recordings)
+  // But ensure recording was active for at least 0.5 seconds
+  const recordingDuration = Date.now() - voiceRecordingStartTime;
+  if (recordingDuration < 500) {
+    showToast('Recording too short - please record for at least 0.5 seconds');
     return;
+  }
+  
+  // Create empty audio blob if no chunks (for silent recordings)
+  if (!state.audioChunks.length) {
+    console.log('No audio chunks, creating silent audio blob');
+    // Create a minimal silent audio blob
+    const silentAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+    const silentBuffer = silentAudioContext.createBuffer(1, 48000, false);
+    const silentBlob = new Blob([silentBuffer], { type: 'audio/webm' });
+    state.audioChunks = [silentBlob];
+    console.log('Created silent audio blob');
   }
   
   // Stop recording first
@@ -1690,7 +1920,9 @@ function createMessageElement(message) {
     return div;
   }
   
-  div.className = `message ${message.is_own ? 'own' : ''}`;
+  // Add sending state class
+  const messageClass = message.is_sending ? 'message-sending' : '';
+  div.className = `message ${message.is_own ? 'own' : ''} ${messageClass}`;
 
   const avatar = document.createElement('div');
   avatar.className = 'message-avatar';
